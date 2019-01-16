@@ -54,12 +54,12 @@ class InputWidgetUQ;
 
 class SIM_Selection;
 class InputWidgetSampling;
-class EarthquakeLoadingInput;
+
 class InputWidgetOpenSeesAnalysis;
 class UQOptions;
 class ResultsWidget;
 class GeneralInformationWidget;
-class InputWidgetEarthquakeEvent;
+class EarthquakeEventSelection;
 class QStackedWidget;
 class DakotaResults;
 
@@ -97,7 +97,7 @@ public slots:
     void selectionChangedSlot(const QItemSelection &, const QItemSelection &);
 
     void setUpForApplicationRun(QString &, QString &);
-    void processResults(QString dakotaOut, QString dakotaTab);
+    void processResults(QString dakotaOut, QString dakotaTab, QString inputFile);
 
     void loadFile(QString filename);
     void replyFinished(QNetworkReply*);
@@ -105,7 +105,6 @@ public slots:
 private:
 
     //MainWindow* window;
-
     QHBoxLayout *horizontalLayout;
     QTreeView *treeView;
     QStandardItemModel *standardModel;
@@ -117,7 +116,7 @@ private:
     // the AppWidgets .. not all displayed in main UI
     SIM_Selection *theSIM;
     InputWidgetSampling *theUQ_Method;
-    InputWidgetEarthquakeEvent *theEvent;
+    EarthquakeEventSelection *theEvent;
     InputWidgetOpenSeesAnalysis *theAnalysis;
     DakotaResults *theResults;
 

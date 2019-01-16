@@ -50,7 +50,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <QItemSelectionModel>
 #include <QModelIndex>
 #include <QStackedWidget>
-#include <InputWidgetEarthquakeEvent.h>
+#include <EarthquakeEventSelection.h>
 #include <RunLocalWidget.h>
 #include <QProcess>
 #include <QCoreApplication>
@@ -122,13 +122,13 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     theRVs = new RandomVariableInputWidget();
     theGI = new GeneralInformationWidget();
     theSIM = new SIM_Selection(theRVs);
-    theEvent = new InputWidgetEarthquakeEvent(theRVs);
+    theEvent = new EarthquakeEventSelection(theRVs);
     theAnalysis = new InputWidgetOpenSeesAnalysis(theRVs);
     theUQ_Method = new InputWidgetSampling();
 
     theResults = new DakotaResultsSampling();
     localApp = new LocalApplication("EE-UQ.py");
-    remoteApp = new RemoteApplication(theService);
+    remoteApp = new RemoteApplication("EE-UQ.py", theService);
     theJobManager = new RemoteJobManager(theService);
 
    // theRunLocalWidget = new RunLocalWidget(theUQ_Method);
@@ -173,11 +173,11 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
 
     connect(localApp,SIGNAL(setupForRun(QString &,QString &)), this, SLOT(setUpForApplicationRun(QString &,QString &)));
     connect(this,SIGNAL(setUpForApplicationRunDone(QString&, QString &)), theRunWidget, SLOT(setupForRunApplicationDone(QString&, QString &)));
-    connect(localApp,SIGNAL(processResults(QString, QString)), this, SLOT(processResults(QString, QString)));
+    connect(localApp,SIGNAL(processResults(QString, QString, QString)), this, SLOT(processResults(QString, QString, QString)));
 
     connect(remoteApp,SIGNAL(setupForRun(QString &,QString &)), this, SLOT(setUpForApplicationRun(QString &,QString &)));
 
-    connect(theJobManager,SIGNAL(processResults(QString , QString)), this, SLOT(processResults(QString, QString)));
+    connect(theJobManager,SIGNAL(processResults(QString , QString, QString)), this, SLOT(processResults(QString, QString, QString)));
     connect(theJobManager,SIGNAL(loadFile(QString)), this, SLOT(loadFile(QString)));
 
     connect(remoteApp,SIGNAL(successfullJobStart()), theRunWidget, SLOT(hide()));
@@ -427,9 +427,9 @@ InputWidgetEE_UQ::outputToJSON(QJsonObject &jsonObjectTop) {
 
 
  void
- InputWidgetEE_UQ::processResults(QString dakotaOut, QString dakotaTab){
+ InputWidgetEE_UQ::processResults(QString dakotaOut, QString dakotaTab, QString inputFile){
 
-      theResults->processResults(dakotaOut, dakotaTab);
+      theResults->processResults(dakotaOut, dakotaTab, inputFile);
       theRunWidget->hide();
       treeView->setCurrentIndex(infoItemIdx);
       theStackedWidget->setCurrentIndex(4);

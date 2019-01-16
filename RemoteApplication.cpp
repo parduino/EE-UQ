@@ -61,9 +61,14 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 #include <ZipUtils.h>
 
-RemoteApplication::RemoteApplication(RemoteService *theService, QWidget *parent)
+RemoteApplication::RemoteApplication(QString name, RemoteService *theService, QWidget *parent)
 : Application(parent), theRemoteService(theService)
 {
+    workflowScriptName = name;
+    shortDirName = workflowScriptName;
+    //shortDirName = name.chopped(3); // remove .py
+    shortDirName.chop(3);
+
     QGridLayout *layout = new QGridLayout();
     QLabel *nameLabel = new QLabel();
 
@@ -170,6 +175,11 @@ RemoteApplication::RemoteApplication(RemoteService *theService, QWidget *parent)
     // set up connections
     //
 
+    this->setStyleSheet("QComboBox {background: #FFFFFF;} \
+  QGroupBox {font-weight: bold;}\
+  QLineEdit {background-color: #FFFFFF; border: 2px solid darkgray;} \
+  QTabWidget::pane {background-color: #ECECEC; border: 1px solid rgb(239, 239, 239);}");
+
     connect(pushButton,SIGNAL(clicked()), this, SLOT(onRunButtonPressed()));
 }
 
@@ -237,7 +247,7 @@ RemoteApplication::onRunButtonPressed(void)
 
 
 //
-// now use the applications Workflow Application EE-UQ.py  to run dakota and produce output files:
+// now use the applications Workflow Application script to run dakota and produce output files:
 //    dakota.in dakota.out dakotaTab.out dakota.err
 //
 
@@ -246,12 +256,13 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
 
     QString appDir = localAppDirName->text();
 
+    qDebug() << "REMOTEAPP: setupDone " << tmpDirectory << " " << inputFile << " " << appDir;
     QString pySCRIPT;
 
     QDir scriptDir(appDir);
     scriptDir.cd("applications");
     scriptDir.cd("Workflow");
-    pySCRIPT = scriptDir.absoluteFilePath("EE-UQ.py");
+    pySCRIPT = scriptDir.absoluteFilePath(workflowScriptName);
     QFileInfo check_script(pySCRIPT);
     // check if file exists and if yes: Is it really a file and no directory?
     if (!check_script.exists() || !check_script.isFile()) {
@@ -285,7 +296,10 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
     //
 
     QProcess *proc = new QProcess();
+    QStringList args{pySCRIPT, "set_up",inputFile,registryFile};
+    proc->execute("python",args);
 
+    /*
 #ifdef Q_OS_WIN
     QString command = QString("python ") + pySCRIPT + QString(" ") + " set_up " + QString(" ") + inputFile  + QString(" ") + registryFile;
     qDebug() << "PYTHON COMMAND: " << command;
@@ -297,10 +311,10 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
             registryFile;
 
     proc->execute("bash", QStringList() << "-c" <<  command);
-
-    qInfo() << command;
+    qDebug() << "PYTHON COMMAND: " << command;
 
 #endif
+    */
     proc->waitForStarted();
 
 
@@ -319,6 +333,7 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
 
     QFileInfo check_workflow(templateDir.absoluteFilePath("workflow_driver"));
     if (!check_workflow.exists() || !check_workflow.isFile()) {
+        emit sendErrorMessage(("Local Falure Setting up Dakota"));
         qDebug() << "Local Failure Setting Up Dakota ";
         return false;
     }
@@ -326,12 +341,13 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
 
     QString zipFile(templateDir.absoluteFilePath("templatedir.zip"));
     qDebug() << "ZIP FILE: " << zipFile;
-    qDebug() << "DIR TO REMOVE: " << templateDIR;
+    qDebug() << "DIR TO ZIP: " << templateDIR;
+    QDir tmpDir(templateDIR);
 
-    //ZipUtils::ZipFolder(templateDir, zipFile);
-    ZipUtils::ZipFolder(QDir(templateDIR), zipFile);
+    ZipUtils::ZipFolder(tmpDir, zipFile);
+    //ZipUtils::ZipFolder(QDir(templateDIR), zipFile);
 
-    //QDir dirToRemove(templateDIR);
+    QDir dirToRemove(templateDIR);
     templateDir.cd("templatedir");
     templateDir.removeRecursively();
 
@@ -347,11 +363,13 @@ RemoteApplication::setupDoneRunApplication(QString &tmpDirectory, QString &input
 
     QDir theDirectory(tmpDirectory);
     theDirectory.cdUp();
-    theDirectory.rename("tmp.SimCenter",newName);
+    if (theDirectory.rename("tmp.SimCenter",newName) != true) {
+        emit sendErrorMessage(QString("Could not rename directory to ") + newName);
+        return false;
+    }
 
+    qDebug() << "newName: " << newName;
     tempDirectory = theDirectory.absoluteFilePath(newName);
-
-    qDebug() << "NEW TMP DIR FOR REMOTE APPLICATION: " << tempDirectory;
 
     theDirectory.cd(newName);
     QString dirName = theDirectory.dirName();
@@ -379,7 +397,7 @@ RemoteApplication::uploadDirReturn(bool result)
       
       pushButton->setDisabled(true);
       
-      job["name"]=QString("EE-UQ:") + nameLineEdit->text();
+      job["name"]=shortDirName + nameLineEdit->text();
       int nodeCount = numCPU_LineEdit->text().toInt();
       int numProcessorsPerNode = numProcessorsLineEdit->text().toInt();
       job["nodeCount"]=nodeCount;

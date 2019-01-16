@@ -68,7 +68,6 @@ int main(int argc, char *argv[])
   qInstallMessageHandler(customMessageOutput);
 
   // window scaling for mac
-  //qputenv("QT_AUTO_SCREEN_SCALE_FACTOR", "1");
   QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 
   QApplication a(argc, argv);
@@ -119,6 +118,8 @@ int main(int argc, char *argv[])
 
      w.setAbout(textAboutEE_UQ);
 
+     QString version("1.0.2");
+     w.setVersion(version);
 
   //
   // move remote interface to a thread
@@ -146,8 +147,9 @@ int main(int argc, char *argv[])
 
 
   theInputApp->setStyleSheet("QComboBox {background: #FFFFFF;} \
-QLineEdit {background-color: #FFFFFF;background-radius: 5px; border: 2px solid darkgray;} \
-QTabWidget::pane {background-color: #F4F4F4; border: 1px solid rgb(239, 239, 239);}");
+QGroupBox {font-weight: bold;}\
+QLineEdit {background-color: #FFFFFF; border: 2px solid darkgray;} \
+QTabWidget::pane {background-color: #ECECEC; border: 1px solid rgb(239, 239, 239);}");
 
 
 //QTQTabWidget::pane{
