@@ -38,7 +38,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 #include "ExistingPEER_Events.h"
 #include <InputWidgetExistingEvent.h>
-#include <RandomVariableInputWidget.h>
+#include <RandomVariablesContainer.h>
 
 #include <QSpinBox>
 #include <QPushButton>
@@ -53,8 +53,9 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <QRadioButton>
 #include <QFileDialog>
 #include <QScrollArea>
+#include <LineEditRV.h>
 
-PeerRecord::PeerRecord(RandomVariableInputWidget *theRV_IW, QWidget *parent)
+PeerRecord::PeerRecord(RandomVariablesContainer *theRV_IW, QWidget *parent)
 :SimCenterWidget(parent), theRandVariableIW(theRV_IW)
 {
    QHBoxLayout *layout = new QHBoxLayout();
@@ -75,9 +76,8 @@ PeerRecord::PeerRecord(RandomVariableInputWidget *theRV_IW, QWidget *parent)
    connect(chooseFile,SIGNAL(clicked()),this,SLOT(chooseFileName()));
 
    QLabel *labelFactor = new QLabel(tr("Factor"));
-   factor = new QLineEdit("1.0");
-   lastFactor = "";
-   connect(factor,SIGNAL(editingFinished()),this,SLOT(factorEditingFinished()));
+   factor = new LineEditRV(theRV_IW);
+   factor->setText(QString("1.0"));
 
    layout->addWidget(button);
    layout->addWidget(labelFile);
@@ -98,22 +98,6 @@ PeerRecord::~PeerRecord()
 
 }
 
-// need to check if a random variable
-void PeerRecord::factorEditingFinished() {
-    QString text = factor->text();
-    bool ok;
-    double factorDouble = text.QString::toDouble(&ok);
-
-    if (ok == false) {
-        if (text != lastFactor) {
-            QStringList rvs;
-            rvs.append(text);
-            rvs.append("1.0");
-            theRandVariableIW->addConstantRVs(rvs);
-            lastFactor = text;
-        }
-    }
-}
 
 void
 PeerRecord::chooseFileName(void) {
@@ -121,6 +105,7 @@ PeerRecord::chooseFileName(void) {
     file->setText(fileName1);
     QFileInfo fileInfo(file->text());
 }
+
 
 void
 PeerRecord::onRemoveRecord(bool value) {
@@ -136,15 +121,7 @@ PeerRecord::outputToJSON(QJsonObject &jsonObject) {
     jsonObject["filePath"]=fileInfo.path();
     jsonObject["dirn"]=dirn->value();
 
-    QString factorText = factor->text();
-    bool ok;
-    double factorDouble = factorText.QString::toDouble(&ok);
-    if (ok == true)
-        jsonObject["factor"]=factorDouble;
-    else
-        jsonObject["factor"]= QString("RV.") + factor->text();
-
-    return true;
+    return factor->outputToJSON(jsonObject, QString("factor"));
 }
 
 bool
@@ -173,23 +150,11 @@ PeerRecord::inputFromJSON(QJsonObject &jsonObject) {
     } else
         return false;
 
-
-    if (jsonObject.contains("factor")) {
-        QJsonValue theValue = jsonObject["factor"];
-        if (theValue.isString()) {
-            QString text = theValue.toString();
-            text.remove(0,3); // remove RV.
-           factor->setText(text);
-       } else if (theValue.isDouble())
-            factor->setText(QString::number(theValue.toDouble()));
-    } else
-        return false;
-
-    return true;
+    return factor->inputFromJSON(jsonObject, QString("factor"));
 }
 
 
-PeerEvent::PeerEvent(RandomVariableInputWidget *theRV_IW, QWidget *parent)
+PeerEvent::PeerEvent(RandomVariablesContainer *theRV_IW, QWidget *parent)
     :SimCenterWidget(parent), theRandVariableIW(theRV_IW)
 {
    QGroupBox *boxWidget = new QGroupBox;
@@ -336,7 +301,7 @@ PeerEvent::onRemoveRecord(bool) {
     }
 }
 
-ExistingPEER_Events::ExistingPEER_Events(RandomVariableInputWidget *theRV_IW, QWidget *parent)
+ExistingPEER_Events::ExistingPEER_Events(RandomVariablesContainer *theRV_IW, QWidget *parent)
     : SimCenterAppWidget(parent), theRandVariableIW(theRV_IW)
 {
     verticalLayout = new QVBoxLayout();
@@ -347,8 +312,7 @@ ExistingPEER_Events::ExistingPEER_Events(RandomVariableInputWidget *theRV_IW, QW
     SectionTitle *title=new SectionTitle();
     title->setText(tr("List of PEER Events"));
     title->setMinimumWidth(250);
-    QSpacerItem *spacer1 = new QSpacerItem(50,10);
-    QSpacerItem *spacer2 = new QSpacerItem(20,10);
+
 
     QPushButton *addEvent = new QPushButton();
     addEvent->setMinimumWidth(75);
@@ -362,11 +326,19 @@ ExistingPEER_Events::ExistingPEER_Events(RandomVariableInputWidget *theRV_IW, QW
     removeEvent->setText(tr("Remove"));
     //    connect(removeEvent,SIGNAL(clicked()),this,SLOT(removeInputWidgetPeerEvent()));
 
+
+    QPushButton *loadDirectory = new QPushButton();
+    loadDirectory->setMinimumWidth(150);
+    loadDirectory->setMaximumWidth(150);
+    loadDirectory->setText(tr("Load Directory"));
+
     titleLayout->addWidget(title);
-    titleLayout->addItem(spacer1);
+    titleLayout->addSpacing(50);
     titleLayout->addWidget(addEvent);
-    titleLayout->addItem(spacer2);
+    titleLayout->addSpacing(20);
     titleLayout->addWidget(removeEvent);
+    titleLayout->addSpacing(50);
+    titleLayout->addWidget(loadDirectory);
     titleLayout->addStretch();
 
     QScrollArea *sa = new QScrollArea;
@@ -387,8 +359,11 @@ ExistingPEER_Events::ExistingPEER_Events(RandomVariableInputWidget *theRV_IW, QW
     //verticalLayout->addStretch();
 
     this->setLayout(verticalLayout);
+
+
     connect(addEvent, SIGNAL(pressed()), this, SLOT(addEvent()));
     connect(removeEvent, SIGNAL(pressed()), this, SLOT(removeEvents()));
+    connect(loadDirectory, SIGNAL(pressed()), this, SLOT(loadEventsFromDir()));
 }
 
 
@@ -407,6 +382,93 @@ void ExistingPEER_Events::addEvent(void)
    //connect(this,SLOT(InputWidgetExistingEventErrorMessage(QString)), theEvent, SIGNAL(sendErrorMessage(QString)));
 }
 
+void ExistingPEER_Events::loadEventsFromDir(void) {
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"),
+                                                 "/home",
+                                                 QFileDialog::ShowDirsOnly
+                                                 | QFileDialog::DontResolveSymlinks);
+
+    this->clear();
+
+    QDir directory(dir);
+    QString recordsTxt(directory.filePath("Records.txt"));
+    QFileInfo checkFile(recordsTxt);
+    if (checkFile.exists() && checkFile.isFile()) {
+        QFile file(recordsTxt);
+        if (!file.open(QIODevice::ReadOnly)) {
+                qDebug() << file.errorString();
+                return;
+            }
+
+            QStringList wordList;
+            while (!file.atEnd()) {
+                QByteArray line = file.readLine();
+                QByteArrayList lineList = line.split(',');
+
+                if (lineList.length() >= 2) {
+
+                    QString fileName = lineList.at(0);
+                    QString factor = lineList.at(1);
+                    factor.remove(QRegExp("[\\n\\t\\r]"));
+
+                    QFileInfo checkName(directory.filePath(fileName));
+                    if (checkName.exists() && checkName.isFile()) {
+
+                        InputWidgetExistingEvent *theExisting = new InputWidgetExistingEvent(theRandVariableIW);
+                        PeerEvent *theEvent = new PeerEvent(theRandVariableIW);
+
+                        QString name(fileName);
+                        name.chop(4); // remove .AT2
+                        if (name.contains("RSN")) {
+                            name.remove(0,3); // remove RSN
+                            int index = name.indexOf(QString("_"));
+                            if (index != -1)
+                                name=name.left(index);
+                        }
+
+                        theEvent->theName->setText(name);
+                        PeerRecord *theRecord = theEvent->theRecords.at(0);
+                        if (theRecord != NULL) {
+                            theRecord->file->setText(directory.filePath(fileName));
+                            theRecord->factor->setText(factor);
+                        }
+
+                        theEvents.append(theEvent);
+                        eventLayout->insertWidget(eventLayout->count()-1, theEvent);
+                    } else {
+                        qDebug() << "Existing PEER_Records: load directory file " << fileName << " does not exist";
+                    }
+                }
+            }
+
+            file.close();
+
+    } else {
+
+        QStringList fileList= directory.entryList(QStringList() << "*.AT2",QDir::Files);
+        foreach(QString fileName, fileList) {
+            InputWidgetExistingEvent *theExisting = new InputWidgetExistingEvent(theRandVariableIW);
+            PeerEvent *theEvent = new PeerEvent(theRandVariableIW);
+            QString name = fileName;
+            name.chop(4); // remove .AT2
+            if (name.contains("RSN")) {
+                name.remove(0,3); // remove RSN
+                int index = name.indexOf(QString("_"));
+                if (index != -1)
+                    name=name.left(index);
+            }
+
+            theEvent->theName->setText(name);
+            PeerRecord *theRecord = theEvent->theRecords.at(0);
+            if (theRecord != NULL) {
+                theRecord->file->setText(directory.filePath(fileName));
+            }
+            theEvents.append(theEvent);
+            eventLayout->insertWidget(eventLayout->count()-1, theEvent);
+        }
+    }
+
+}
 
 void ExistingPEER_Events::removeEvents(void)
 {
@@ -463,42 +525,34 @@ ExistingPEER_Events::outputToJSON(QJsonObject &jsonObject)
 bool
 ExistingPEER_Events::inputFromJSON(QJsonObject &jsonObject)
 {
-  bool result = true;
+    bool result = true;
 
-  // clean out current list
-  this->clear();
+    // clean out current list
+    this->clear();
 
-  //
-  // go get InputWidgetExistingEvents array from the JSON object
-  // for each object in array:
-  //    1)get it'is type,
-  //    2)instantiate one
-  //    4) get it to input itself
-  //    5) finally add it to layout
-  //
+    // get array
+    if (jsonObject.contains("Events")) {
+        if (jsonObject["Events"].isArray()) {
 
-  // get array
+            QJsonArray eventArray = jsonObject["Events"].toArray();
 
-  if (jsonObject.contains("Events"))
-      if (jsonObject["Events"].isArray()) {
+            // foreach object in array
+            foreach (const QJsonValue &eventValue, eventArray) {
 
-          QJsonArray rvArray = jsonObject["Events"].toArray();
+                // get data, create an event, read it and then add to layout
 
-          // foreach object in array
-          foreach (const QJsonValue &rvValue, rvArray) {
+                QJsonObject eventObject = eventValue.toObject();
+                PeerEvent *theEvent = new PeerEvent(theRandVariableIW);
 
-              QJsonObject jsonObject = rvValue.toObject();
-              PeerEvent *theEvent = new PeerEvent(theRandVariableIW);
-
-              if (theEvent->inputFromJSON(jsonObject)) { // this method is where type is set
-                  theEvents.append(theEvent);
-                  eventLayout->insertWidget(eventLayout->count()-1, theEvent);
-              } else {
-                  result = false;
-              }
-          }
-      }
-
+                if (theEvent->inputFromJSON(eventObject)) { // this method is where type is set
+                    theEvents.append(theEvent);
+                    eventLayout->insertWidget(eventLayout->count()-1, theEvent);
+                } else {
+                    result = false;
+                }
+            }
+        }
+    }
 
   return result;
 }

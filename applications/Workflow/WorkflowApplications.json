@@ -38,9 +38,20 @@
 	]
       },
       {
+        "Name": "Site Response",
+        "ExecutablePath": "applications/createEVENT/SiteResponse",
+        "ApplicationSpecificInputs": [
+	]
+      },
+      {
         "Name": "HazardBasedEvent",
         "ExecutablePath": "applications/createEVENT/HazardBasedEvent.py",
         "ApplicationSpecificInputs":[]
+      },
+      {
+        "Name": "StochasticGroundMotion",
+        "ExecutablePath": "applications/createEVENT/StochasticGroundMotion",
+        "ApplicationSpecificInputs":["modelName", "seed"]
       }
     ]
   },
@@ -78,6 +89,11 @@
       {
         "Name": "OpenSeesInput",
         "ExecutablePath": "applications/createSAM/OpenSeesInput",
+        "ApplicationSpecificInputs": []
+      },
+      {
+        "Name": "MDOF_BuildingModel",
+        "ExecutablePath": "applications/createSAM/MDOF_BuildingModel",
         "ApplicationSpecificInputs": []
       }
     ]

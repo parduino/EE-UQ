@@ -38,20 +38,36 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 #include "InputWidgetUQ.h"
 #include <QTabWidget>
-#include <RandomVariableInputWidget.h>
+#include <RandomVariablesContainer.h>
 #include <InputWidgetSampling.h>
 
 
-InputWidgetUQ::InputWidgetUQ(InputWidgetSampling *UQ, RandomVariableInputWidget *RV, QWidget *parent)
+InputWidgetUQ::InputWidgetUQ(InputWidgetSampling *UQ, RandomVariablesContainer *RV, QWidget *parent)
     :QWidget(parent),theRVs(RV),theUQ(UQ)
 {
-    QHBoxLayout *layout = new QHBoxLayout();
+    QVBoxLayout *layout = new QVBoxLayout();
+
+    // place in tab widget
+    /*
     theTab = new QTabWidget();
     theTab->addTab(theUQ,"Sampling Methods");
     theTab->addTab(theRVs,"Random Variables");
     theTab->setCurrentIndex(1);
 
     layout->addWidget(theTab);
+    */
+    QGroupBox* methodGroupBox = new QGroupBox("Sampling Method", this);
+    QVBoxLayout *methodLayout = new QVBoxLayout();
+    methodLayout->addWidget(UQ);
+    methodGroupBox->setLayout(methodLayout);
+    layout->addWidget(methodGroupBox);
+
+    QGroupBox* rvGroupBox = new QGroupBox("Random Variables", this);
+    QVBoxLayout *rvLayout = new QVBoxLayout();
+    rvLayout->addWidget(RV);
+    rvGroupBox->setLayout(rvLayout);
+    layout->addWidget(rvGroupBox, 1.0);
+
     //layout->addStretch();
     layout->setMargin(0);
 

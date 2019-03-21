@@ -63,7 +63,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 #include "GeneralInformationWidget.h"
 #include <SIM_Selection.h>
-#include <RandomVariableInputWidget.h>
+#include <RandomVariablesContainer.h>
 #include <InputWidgetSampling.h>
 #include <InputWidgetOpenSeesAnalysis.h>
 #include <QDir>
@@ -76,7 +76,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <InputWidgetBIM.h>
 #include <InputWidgetUQ.h>
 
-
+#include <EDP_Selection.h>
 
 #include "CustomizedItemModel.h"
 
@@ -119,12 +119,13 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     // create the various widgets
     //
 
-    theRVs = new RandomVariableInputWidget();
-    theGI = new GeneralInformationWidget();
+    theRVs = new RandomVariablesContainer();
+    theGI = GeneralInformationWidget::getInstance();
     theSIM = new SIM_Selection(theRVs);
     theEvent = new EarthquakeEventSelection(theRVs);
     theAnalysis = new InputWidgetOpenSeesAnalysis(theRVs);
     theUQ_Method = new InputWidgetSampling();
+    theEDP = new EDP_Selection(theRVs);
 
     theResults = new DakotaResultsSampling();
     localApp = new LocalApplication("EE-UQ.py");
@@ -181,7 +182,7 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     connect(theJobManager,SIGNAL(loadFile(QString)), this, SLOT(loadFile(QString)));
 
     connect(remoteApp,SIGNAL(successfullJobStart()), theRunWidget, SLOT(hide()));
-
+       
     //connect(theRunLocalWidget, SIGNAL(runButtonPressed(QString, QString)), this, SLOT(runLocal(QString, QString)));
 
 
@@ -189,7 +190,7 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     // some of above widgets are inside some tabbed widgets
     //
 
-    theBIM = new InputWidgetBIM(theGI, theSIM);
+   // theBIM = new InputWidgetBIM(theGI, theSIM);
     theUQ = new InputWidgetUQ(theUQ_Method,theRVs);
 
     //
@@ -218,18 +219,22 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     //QStandardItem *giItem    = new QStandardItem("GEN");
     //
 
-    QStandardItem *bimItem = new QStandardItem("BIM");
+    QStandardItem *giItem = new QStandardItem("GI");
+    QStandardItem *bimItem = new QStandardItem("SIM");
     QStandardItem *evtItem = new QStandardItem("EVT");
     QStandardItem *uqItem   = new QStandardItem("UQ");
     QStandardItem *femItem = new QStandardItem("FEM");
+    QStandardItem *edpItem = new QStandardItem("EDP");
     //QStandardItem *uqItem = new QStandardItem("UQM");
     QStandardItem *resultsItem = new QStandardItem("RES");
 
     //building up the hierarchy of the model
+    rootNode->appendRow(giItem);
     rootNode->appendRow(bimItem);
     rootNode->appendRow(evtItem);
     rootNode->appendRow(femItem);
     rootNode->appendRow(uqItem);
+    rootNode->appendRow(edpItem);
     //rootNode->appendRow(uqItem);
     rootNode->appendRow(resultsItem);
 
@@ -275,10 +280,12 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     //
 
     theStackedWidget = new QStackedWidget();
-    theStackedWidget->addWidget(theBIM);
+    theStackedWidget->addWidget(theGI);
+    theStackedWidget->addWidget(theSIM);
     theStackedWidget->addWidget(theEvent);
     theStackedWidget->addWidget(theAnalysis);
     theStackedWidget->addWidget(theUQ);
+    theStackedWidget->addWidget(theEDP);
     // theStackedWidget->addWidget(theUQ_Method);
     theStackedWidget->addWidget(theResults);
 
@@ -347,18 +354,22 @@ InputWidgetEE_UQ::selectionChangedSlot(const QItemSelection & /*newSelection*/, 
     const QModelIndex index = treeView->selectionModel()->currentIndex();
     QString selectedText = index.data(Qt::DisplayRole).toString();
 
-    if (selectedText == "BIM")
+    if (selectedText == "GI")
         theStackedWidget->setCurrentIndex(0);
-    else if (selectedText == "EVT")
+    if (selectedText == "SIM")
         theStackedWidget->setCurrentIndex(1);
-    else if (selectedText == "FEM")
+    else if (selectedText == "EVT")
         theStackedWidget->setCurrentIndex(2);
-    else if (selectedText == "UQ")
+    else if (selectedText == "FEM")
         theStackedWidget->setCurrentIndex(3);
+    else if (selectedText == "UQ")
+        theStackedWidget->setCurrentIndex(4);
+    else if (selectedText == "EDP")
+        theStackedWidget->setCurrentIndex(5);
     // else if (selectedText == "UQM")
     //   theStackedWidget->setCurrentIndex(5);
     else if (selectedText == "RES")
-        theStackedWidget->setCurrentIndex(4);
+        theStackedWidget->setCurrentIndex(6);
 }
 
 
@@ -387,11 +398,21 @@ InputWidgetEE_UQ::outputToJSON(QJsonObject &jsonObjectTop) {
     //jsonObjectTop["RandomVariables"] = jsonObjectRVs;
     theRVs->outputToJSON(jsonObjectTop);
 
+    /*
     QJsonObject appsEDP;
     appsEDP["Application"] = "StandardEarthquakeEDP";
     QJsonObject dataObj;
     appsEDP["ApplicationData"] = dataObj;
     apps["EDP"] = appsEDP;
+    */
+
+    QJsonObject jsonObjectEDP;
+    theEDP->outputToJSON(jsonObjectEDP);
+    jsonObjectTop["EDP"] = jsonObjectEDP;
+
+    QJsonObject appsEDP;
+    theEDP->outputAppDataToJSON(appsEDP);
+    apps["EDP"]=appsEDP;
 
     QJsonObject jsonObjectUQ;
     theUQ_Method->outputToJSON(jsonObjectUQ);
@@ -415,6 +436,8 @@ InputWidgetEE_UQ::outputToJSON(QJsonObject &jsonObjectTop) {
     theEvent->outputAppDataToJSON(apps);
 
 
+
+
     theRunWidget->outputToJSON(jsonObjectTop);
 
     jsonObjectTop["Applications"]=apps;
@@ -432,7 +455,7 @@ InputWidgetEE_UQ::outputToJSON(QJsonObject &jsonObjectTop) {
       theResults->processResults(dakotaOut, dakotaTab, inputFile);
       theRunWidget->hide();
       treeView->setCurrentIndex(infoItemIdx);
-      theStackedWidget->setCurrentIndex(4);
+      theStackedWidget->setCurrentIndex(6);
  }
 
 void
@@ -459,34 +482,6 @@ InputWidgetEE_UQ::inputFromJSON(QJsonObject &jsonObject)
     if (jsonObject.contains("StructuralInformation")) {
         QJsonObject jsonObjStructuralInformation = jsonObject["StructuralInformation"].toObject();
         theSIM->inputFromJSON(jsonObjStructuralInformation);
-    } else
-        return false;
-
-    /*
-    ** Note to me - RVs and Events treated differently as both use arrays .. rethink API!
-    */
-
-    theEvent->inputFromJSON(jsonObject);
-    theRVs->inputFromJSON(jsonObject);
-    theRunWidget->inputFromJSON(jsonObject);
-
-    /*
-    if (jsonObject.contains("Events")) {
-        QJsonObject jsonObjEventInformation = jsonObject["Event"].toObject();
-        theEvent->inputFromJSON(jsonObjEventInformation);
-    } else
-        return false;
-
-    if (jsonObject.contains("RandomVariables")) {
-        QJsonObject jsonObjRVsInformation = jsonObject["RandomVariables"].toObject();
-        theRVS->inputFromJSON(jsonObRVSInformation);
-    } else
-        return false;
-    */
-
-    if (jsonObject.contains("UQ_Method")) {
-        QJsonObject jsonObjUQInformation = jsonObject["UQ"].toObject();
-        theEvent->inputFromJSON(jsonObjUQInformation);
     } else
         return false;
 
@@ -520,9 +515,37 @@ InputWidgetEE_UQ::inputFromJSON(QJsonObject &jsonObject)
         } else
             return false;
 
+        if (theApplicationObject.contains("EDP")) {
+            QJsonObject theObject = theApplicationObject["EDP"].toObject();
+            theEDP->inputAppDataFromJSON(theObject);
+        } else
+            return false;
 
     } else
         return false;
+
+    /*
+    ** Note to me - RVs and Events treated differently as both use arrays .. rethink API!
+    */
+
+    theEvent->inputFromJSON(jsonObject);
+    theRVs->inputFromJSON(jsonObject);
+    theRunWidget->inputFromJSON(jsonObject);
+
+
+    if (jsonObject.contains("EDP")) {
+        QJsonObject edpObj = jsonObject["EDP"].toObject();
+         qDebug() << "HELLO" << edpObj;
+        theEDP->inputFromJSON(edpObj);
+    } else
+        return false;
+
+    if (jsonObject.contains("UQ_Method")) {
+        QJsonObject jsonObjUQInformation = jsonObject["UQ"].toObject();
+        theEvent->inputFromJSON(jsonObjUQInformation);
+    } else
+        return false;
+
 
     return true;
 }
@@ -614,6 +637,7 @@ InputWidgetEE_UQ::setUpForApplicationRun(QString &workingDir, QString &subDir) {
     theEvent->copyFiles(templateDirectory);
     theAnalysis->copyFiles(templateDirectory);
     theUQ_Method->copyFiles(templateDirectory);
+    theEDP->copyFiles(templateDirectory);
 
     //
     // in new templatedir dir save the UI data into dakota.json file (same result as using saveAs)

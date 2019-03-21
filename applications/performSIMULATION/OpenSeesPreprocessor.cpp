@@ -209,6 +209,16 @@ OpenSeesPreprocessor::processMaterials(ofstream &s){
         << " " << -beta*(alpha*Sy) << " " << e3n
         << " " << gamma
         << " " << gamma << " " << 0.0 << " " << 0.0 << " " << a_k << "\n";
+
+    } else if (strcmp(type,"bilinear") == 0) {
+
+      int tag = json_integer_value(json_object_get(material,"name"));
+      double K = json_number_value(json_object_get(material,"K"));
+      double Fy = json_number_value(json_object_get(material,"Fy"));
+      double beta = json_number_value(json_object_get(material,"beta"));
+
+      s << "uniaxialMaterial Steel01 " << tag << " " << Fy << " " << K
+        << " " << beta << "\n";
     }
   }
   return 0;
@@ -305,8 +315,24 @@ OpenSeesPreprocessor::processElements(ofstream &s){
 	s << json_integer_value(nodeTag) << " " ;
       }
 
-      int matTag = json_integer_value(json_object_get(element,"uniaxial_material"));
-      s << "-mat " << matTag << " " << matTag << " -dir 1 2\n";
+      json_t *matObject = json_object_get(element,"uniaxial_material");
+	int sizeMat = json_array_size(matObject);
+	if (sizeMat == 0) {
+	  int matTag = json_integer_value(matObject);
+	  s << "-mat " << matTag << " " << matTag << " -dir 1 2\n";
+	} else if (sizeMat == 1) {
+	  int matTag = json_integer_value(json_array_get(matObject,0));	  
+	  s << "-mat " << matTag << " " << matTag << " -dir 1 2\n";
+	} else if (sizeMat == 2) {
+	  int matTag1 = json_integer_value(json_array_get(matObject,0));	  
+	  int matTag2 = json_integer_value(json_array_get(matObject,1));	  
+	  s << "-mat " << matTag1 << " " << matTag2 << " -dir 1 2\n";
+	} else if (sizeMat == 3) {
+	  int matTag1 = json_integer_value(json_array_get(matObject,0));	  
+	  int matTag2 = json_integer_value(json_array_get(matObject,1));	  
+	  int matTag3 = json_integer_value(json_array_get(matObject,2));	  
+	  s << "-mat " << matTag1 << " " << matTag2 << " " << matTag3 << " -dir 1 2 3\n";
+	}
     }
   }
   return 0;
@@ -371,9 +397,12 @@ OpenSeesPreprocessor::processEvents(ofstream &s){
   json_t *edps = json_object_get(rootEDP,"EngineeringDemandParameters");  
 
   int numEvents = json_array_size(events);
+
   int numEDPs = json_array_size(edps);
 
   s << "loadConst -time 0.0\n";
+
+  const char *postprocessingScript = NULL;
 
   for (int i=0; i<numEvents; i++) {
     
@@ -398,22 +427,41 @@ OpenSeesPreprocessor::processEvents(ofstream &s){
       //      if (strcmp(edpEventName, eventName) == 0) {
       sprintf(edpEventName,"%d",j);
 
-	json_t *eventEDP = json_object_get(eventEDPs,"responses");
+      
+      //
+      // check for additionalInput
+      //
+      
+      json_t *recorderIn = json_object_get(eventEDPs,"additionalInput"); 
+      if (recorderIn != NULL) {
+	const char *fileIN = json_string_value(recorderIn);
+	s << "source " << fileIN << "\n";
+      }
+
+      json_t *postprocessScript = json_object_get(eventEDPs,"postprocessScript"); 
+      if (postprocessScript != NULL) {
+	postprocessingScript = json_string_value(postprocessScript);
+      }
+    
+      json_t *eventEDP = json_object_get(eventEDPs,"responses");
+
+      if (eventEDP != NULL) {
+      
 	int numResponses = json_array_size(eventEDP);
-
+	
 	for (int k=0; k<numResponses; k++) {
-
-
+	  
+	  
 	  json_t *response = json_array_get(eventEDP, k);
 	  const char *type = json_string_value(json_object_get(response, "type"));
-
+	  
 	  if (strcmp(type,"max_abs_acceleration") == 0) {
-
+	    
 	    const char *cline = json_string_value(json_object_get(response, "cline"));
 	    const char *floor = json_string_value(json_object_get(response, "floor"));
-
+	    
 	    int nodeTag = this->getNode(cline,floor);	    
-
+	    
 	    json_t *theDOFs = json_object_get(response, "dofs");
 	    int sizeDOFs = json_array_size(theDOFs);
 	    int *dof = new int[sizeDOFs];
@@ -536,8 +584,9 @@ OpenSeesPreprocessor::processEvents(ofstream &s){
 	    delete [] dof;
 	  }
 	}
-	// removing requirement name be same
+      }
     }
+   
 
     // create analysis
     if (analysisType == 1) {
@@ -556,6 +605,23 @@ OpenSeesPreprocessor::processEvents(ofstream &s){
 	s << "analyze " << numSteps << " " << dT << "\n";      
       }
     }
+
+
+    if (postprocessingScript != NULL) {
+      if(strstr(postprocessingScript, ".py") != NULL) {
+	s <<  "remove recorders\n proc call_python {} {\n set output [exec python " <<
+	  postprocessingScript << "]\n puts $output\n }\n call_python \n";
+      } else if(strstr(postprocessingScript, ".tcl") != NULL) {
+	  s << "source " << postprocessingScript;
+      }
+    }
+
+    /*
+    if (additionalIn != NULL) {
+      const char *fileIN = json_string_value(additionalIn);
+      s << "source " << fileIN << "\n";
+    }
+    */
   }
   return 0;
 }
@@ -740,7 +806,7 @@ OpenSeesPreprocessor:: getNode(const char * cline,const char * floor){
 
 int main(int argc, char **argv)
 {
-  // OpenSeesPreprocessor BIM.json SAM.json EVENT.json SIM.json -getRV
+  // OpenSeesPreprocessor BIM.json SAM.json EVENT.json SIM.json --getRV
   // OpenSeesPreprocessor BIM.json SAM.json EVENT.json EDP.json SIM.json script 
 
   OpenSeesPreprocessor thePreprocessor;

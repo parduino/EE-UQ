@@ -48,7 +48,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include "MainWindow.h"
 #include <WorkflowAppWidget.h>
 
-class RandomVariableInputWidget;
+class RandomVariablesContainer;
 class InputWidgetBIM;
 class InputWidgetUQ;
 
@@ -70,6 +70,7 @@ class RemoteService;
 class RemoteJobManager;
 class QNetworkAccessManager;
 class QNetworkReply;
+class EDP_Selection;
 
 class InputWidgetEE_UQ : public WorkflowAppWidget
 {
@@ -111,13 +112,14 @@ private:
     QStandardItem *rootNode;
 
     GeneralInformationWidget *theGI;
-    RandomVariableInputWidget *theRVs;
+    RandomVariablesContainer *theRVs;
 
     // the AppWidgets .. not all displayed in main UI
     SIM_Selection *theSIM;
     InputWidgetSampling *theUQ_Method;
     EarthquakeEventSelection *theEvent;
     InputWidgetOpenSeesAnalysis *theAnalysis;
+    EDP_Selection *theEDP;
     DakotaResults *theResults;
 
     // other widgets appearing in UI

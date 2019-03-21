@@ -38,7 +38,7 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 #include "ExistingSimCenterEvents.h"
 #include <InputWidgetExistingEvent.h>
-#include <RandomVariableInputWidget.h>
+#include <RandomVariablesContainer.h>
 
 #include <QPushButton>
 #include <QScrollArea>
@@ -53,8 +53,10 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <QFileDialog>
 #include <QScrollArea>
 
+#include <LineEditRV.h>
 
-ExistingEvent::ExistingEvent(RandomVariableInputWidget *theRV_IW, QWidget *parent)
+
+ExistingEvent::ExistingEvent(RandomVariablesContainer *theRV_IW, QWidget *parent)
     :SimCenterWidget(parent), theRandVariableIW(theRV_IW)
 {
    QHBoxLayout *layout = new QHBoxLayout();
@@ -71,9 +73,12 @@ ExistingEvent::ExistingEvent(RandomVariableInputWidget *theRV_IW, QWidget *paren
    connect(chooseFile,SIGNAL(clicked()),this,SLOT(chooseFileName()));
 
    QLabel *labelFactor = new QLabel(tr("Factor"));
-   factor = new QLineEdit("1.0");
+   factor = new LineEditRV(theRV_IW);
+   factor->setText("1.0");
+
    lastFactor = "";
-   connect(factor,SIGNAL(editingFinished()),this,SLOT(factorEditingFinished()));
+
+   //connect(factor,SIGNAL(editingFinished()),this,SLOT(factorEditingFinished()));
 
    layout->addWidget(button);
    layout->addWidget(theName);
@@ -92,22 +97,6 @@ ExistingEvent::~ExistingEvent()
 
 }
 
-// need to check if a random variable
-void ExistingEvent::factorEditingFinished() {
-    QString text = factor->text();
-    bool ok;
-    double factorDouble = text.QString::toDouble(&ok);
-
-    if (ok == false) {
-        if (text != lastFactor) {
-            QStringList rvs;
-            rvs.append(text);
-            rvs.append("1.0");
-            theRandVariableIW->addConstantRVs(rvs);
-            lastFactor = text;
-        }
-    }
-}
 
 void
 ExistingEvent::chooseFileName(void) {
@@ -128,16 +117,7 @@ ExistingEvent::outputToJSON(QJsonObject &jsonObject) {
     jsonObject["fileName"]= fileInfo.fileName();
     jsonObject["filePath"]=fileInfo.path();
     jsonObject["name"]=theName->text();
-
-    QString factorText = factor->text();
-    bool ok;
-    double factorDouble = factorText.QString::toDouble(&ok);
-    if (ok == true)
-        jsonObject["factor"]=factorDouble;
-    else
-        jsonObject["factor"]= QString("RV.") + factor->text();
-
-    return true;
+    return factor->outputToJSON(jsonObject, QString("factor"));
 }
 
 bool
@@ -165,21 +145,10 @@ ExistingEvent::inputFromJSON(QJsonObject &jsonObject) {
     } else
         return false;
 
-    if (jsonObject.contains("factor")) {
-        QJsonValue theValue = jsonObject["factor"];
-        if (theValue.isString()) {
-            QString text = theValue.toString();
-            text.remove(0,3); // remove RV.
-           factor->setText(text);
-       } else if (theValue.isDouble())
-            factor->setText(QString::number(theValue.toDouble()));
-    } else
-        return false;
-
-    return true;
+    return factor->inputFromJSON(jsonObject, QString("factor"));
 }
 
-ExistingSimCenterEvents::ExistingSimCenterEvents(RandomVariableInputWidget *theRV_IW, QWidget *parent)
+ExistingSimCenterEvents::ExistingSimCenterEvents(RandomVariablesContainer *theRV_IW, QWidget *parent)
     : SimCenterAppWidget(parent), theRandVariableIW(theRV_IW)
 {
     verticalLayout = new QVBoxLayout();
@@ -190,8 +159,8 @@ ExistingSimCenterEvents::ExistingSimCenterEvents(RandomVariableInputWidget *theR
     SectionTitle *title=new SectionTitle();
     title->setText(tr("List of SimCenter Events"));
     title->setMinimumWidth(250);
-    QSpacerItem *spacer1 = new QSpacerItem(50,10);
-    QSpacerItem *spacer2 = new QSpacerItem(20,10);
+   // QSpacerItem *spacer1 = new QSpacerItem(50,10);
+   // QSpacerItem *spacer2 = new QSpacerItem(20,10);
 
     QPushButton *addEvent = new QPushButton();
     addEvent->setMinimumWidth(75);
@@ -205,11 +174,18 @@ ExistingSimCenterEvents::ExistingSimCenterEvents(RandomVariableInputWidget *theR
     removeEvent->setText(tr("Remove"));
     //    connect(removeEvent,SIGNAL(clicked()),this,SLOT(removeInputWidgetExistingEvent()));
 
+    QPushButton *loadDirectory = new QPushButton();
+    loadDirectory->setMinimumWidth(150);
+    loadDirectory->setMaximumWidth(150);
+    loadDirectory->setText(tr("Load Directory"));
+
     titleLayout->addWidget(title);
-    titleLayout->addItem(spacer1);
+    titleLayout->addSpacing(50);
     titleLayout->addWidget(addEvent);
-    titleLayout->addItem(spacer2);
+    titleLayout->addSpacing(20);
     titleLayout->addWidget(removeEvent);
+    titleLayout->addSpacing(50);
+    titleLayout->addWidget(loadDirectory);
     titleLayout->addStretch();
 
     QScrollArea *sa = new QScrollArea;
@@ -231,6 +207,7 @@ ExistingSimCenterEvents::ExistingSimCenterEvents(RandomVariableInputWidget *theR
     this->setLayout(verticalLayout);
     connect(addEvent, SIGNAL(pressed()), this, SLOT(addEvent()));
     connect(removeEvent, SIGNAL(pressed()), this, SLOT(removeEvents()));
+    connect(loadDirectory, SIGNAL(pressed()), this, SLOT(loadEventsFromDir()));
 }
 
 
@@ -246,10 +223,78 @@ void ExistingSimCenterEvents::addEvent(void)
    ExistingEvent *theEvent = new ExistingEvent(theRandVariableIW, theExisting);
    theEvents.append(theEvent);
    eventLayout->insertWidget(eventLayout->count()-1, theEvent);
-
- //  connect(this,SLOT(InputWidgetExistingEventErrorMessage(QString)), theEvent, SIGNAL(sendErrorMessage(QString)));
 }
 
+
+void ExistingSimCenterEvents::loadEventsFromDir(void) {
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"),
+                                                 "/home",
+                                                 QFileDialog::ShowDirsOnly
+                                                 | QFileDialog::DontResolveSymlinks);
+
+    this->clear();
+
+    QDir directory(dir);
+    QString recordsTxt(directory.filePath("Records.txt"));
+    QFileInfo checkFile(recordsTxt);
+
+    if (checkFile.exists() && checkFile.isFile()) {
+
+        QFile file(recordsTxt);
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << file.errorString();
+            return;
+        }
+
+        QStringList wordList;
+        while (!file.atEnd()) {
+            QByteArray line = file.readLine();
+            QByteArrayList lineList = line.split(',');
+            if (lineList.length() >= 2) {
+
+                QString fileName = lineList.at(0);
+                QString factor = lineList.at(1);
+                factor.remove(QRegExp("[\\n\\t\\r]"));
+
+                QFileInfo checkName(directory.filePath(fileName));
+                if (checkName.exists() && checkName.isFile()) {
+
+                    ExistingEvent *theEvent = new ExistingEvent(theRandVariableIW);
+                    QFileInfo infoFile(fileName);
+                    QString name = infoFile.baseName();
+                    theEvent->theName->setText(name);
+                    theEvent->file->setText(directory.filePath(fileName));
+                    theEvent->factor->setText(factor);
+
+                    theEvents.append(theEvent);
+                    eventLayout->insertWidget(eventLayout->count()-1, theEvent);
+
+                } else {
+                    qDebug() << "ExistingEvents: load directory file " << fileName << " does not exist";
+                }
+            }
+
+        }
+
+        file.close();
+
+    } else {
+
+        QStringList fileList= directory.entryList(QStringList() << "*.json",QDir::Files);
+        foreach(QString fileName, fileList) {
+            InputWidgetExistingEvent *theExisting = new InputWidgetExistingEvent(theRandVariableIW);
+            ExistingEvent *theEvent = new ExistingEvent(theRandVariableIW);
+            QFileInfo infoFile(fileName);
+            QString name = infoFile.baseName();
+            theEvent->theName->setText(name);
+            theEvent->file->setText(directory.filePath(fileName));
+
+            theEvents.append(theEvent);
+            eventLayout->insertWidget(eventLayout->count()-1, theEvent);
+        }
+    }
+
+}
 
 void ExistingSimCenterEvents::removeEvents(void)
 {
@@ -290,9 +335,9 @@ ExistingSimCenterEvents::outputToJSON(QJsonObject &jsonObject)
     bool result = true;
     QJsonArray theArray;
     for (int i = 0; i <theEvents.size(); ++i) {
-        QJsonObject rv;
-        if (theEvents.at(i)->outputToJSON(rv)) {
-            theArray.append(rv);
+        QJsonObject eventObject;
+        if (theEvents.at(i)->outputToJSON(eventObject)) {
+            theArray.append(eventObject);
 
         } else {
             qDebug() << "OUTPUT FAILED" << theEvents.at(i)->file->text();
@@ -304,36 +349,30 @@ ExistingSimCenterEvents::outputToJSON(QJsonObject &jsonObject)
 }
 
 bool
-ExistingSimCenterEvents::inputFromJSON(QJsonObject &rvObject)
+ExistingSimCenterEvents::inputFromJSON(QJsonObject &jsonObject)
 {
   bool result = true;
 
   // clean out current list
   this->clear();
 
-  //
-  // go get InputWidgetExistingEvents array from the JSON object
-  // for each object in array:
-  //    1)get it'is type,
-  //    2)instantiate one
-  //    4) get it to input itself
-  //    5) finally add it to layout
-  //
+  // get Events array
 
-  // get array
+  if (jsonObject.contains("Events"))
+      if (jsonObject["Events"].isArray()) {
 
-  if (rvObject.contains("Events"))
-      if (rvObject["Events"].isArray()) {
-
-          QJsonArray rvArray = rvObject["Events"].toArray();
+          QJsonArray eventArray = jsonObject["Events"].toArray();
 
           // foreach object in array
-          foreach (const QJsonValue &rvValue, rvArray) {
+          foreach (const QJsonValue &eventValue, eventArray) {
 
-              QJsonObject rvObject = rvValue.toObject();
+               // get data, create an event, read it and then add to layout
+
+              QJsonObject eventObject = eventValue.toObject();
               ExistingEvent *theEvent = new ExistingEvent(theRandVariableIW);
 
-              if (theEvent->inputFromJSON(rvObject)) { // this method is where type is set
+              if (theEvent->inputFromJSON(eventObject)) { // this method is where type is set
+                  qDebug() << "read event";
                   theEvents.append(theEvent);
                   eventLayout->insertWidget(eventLayout->count()-1, theEvent);
               } else {
