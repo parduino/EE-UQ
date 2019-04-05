@@ -564,7 +564,6 @@ int DakotaResultsSampling::processResults(QString filenameResults, QString filen
         std::istringstream is(inputLine);
         int col=0;
         spreadsheet->insertRow(rowCount);
-        qDebug() << "RowCOUNT: " << rowCount;
         for (int i=0; i<colCount+2; i++) {
             std::string data;
             is >> data;
@@ -617,6 +616,8 @@ int DakotaResultsSampling::processResults(QString filenameResults, QString filen
     tabWidget->addTab(widget, tr("Data Values"));
 
     tabWidget->adjustSize();
+
+    emit sendErrorMessage(tr(""));
 
     return 0;
 }

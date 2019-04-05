@@ -137,6 +137,7 @@ private:
 
     QStackedWidget *theStackedWidget;
     QNetworkAccessManager *manager;
+
 };
 
 #endif // INPUT_WIDGET_EE_UQ_H

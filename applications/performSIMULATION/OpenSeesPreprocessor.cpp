@@ -1,12 +1,11 @@
 #include "OpenSeesPreprocessor.h"
+#include "iostream"
 #include <jansson.h> 
 #include <string.h>
 #include <string>
 #include <sstream>
-#include <map>
-#include <iostream>
-#include <algorithm>
 #include <cmath>
+#include <Units.h>
 
 OpenSeesPreprocessor::OpenSeesPreprocessor()
   :rootBIM(0), rootSAM(0), rootEVENT(0), rootEDP(0), rootSIM(0), 
@@ -341,37 +340,41 @@ OpenSeesPreprocessor::processElements(ofstream &s){
 
 int
 OpenSeesPreprocessor::processDamping(ofstream &s){
+
     double damping = json_number_value(json_object_get(rootSIM,"dampingRatio"));
-    s << "set xDamp " << damping << ";\n"
-      << "set MpropSwitch 1.0;\n"
-      << "set KcurrSwitch 0.0;\n"
-      << "set KinitSwitch 0.0;\n"
-      << "set KcommSwitch 1.0;\n"
-      << "set nEigenI 1;\n";
 
-    json_t *geometry = json_object_get(rootSAM,"Geometry");
-    json_t *nodes = json_object_get(geometry,"nodes");
-    int nStory = json_array_size(nodes)-1;
-    int nEigenJ=0;
-    if (nStory <= 0) {
-      nEigenJ = 2;
-      nStory = 1;
-    } else if (nStory<=2)
-      nEigenJ=nStory*2;   //first mode or second mode
-    else
-      nEigenJ=3*2;          
-
-     s << "set nEigenJ "<<nEigenJ<<";\n"
-       << "set lambdaN [eigen -fullGenLapack "<< nEigenJ <<"];\n"
-       << "set lambdaI [lindex $lambdaN [expr $nEigenI-1]];\n"
-       << "set lambdaJ [lindex $lambdaN [expr $nEigenJ-1]];\n"
-       << "set omegaI [expr pow($lambdaI,0.5)];\n"
-       << "set omegaJ [expr pow($lambdaJ,0.5)];\n"
-       << "set alphaM [expr $MpropSwitch*$xDamp*(2*$omegaI*$omegaJ)/($omegaI+$omegaJ)];\n"
-       << "set betaKcurr [expr $KcurrSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
-       << "set betaKinit [expr $KinitSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
-       << "set betaKcomm [expr $KcommSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
-       << "rayleigh $alphaM $betaKcurr $betaKinit $betaKcomm;\n";
+    if (damping != 0.0) {
+      s << "set xDamp " << damping << ";\n"
+	<< "set MpropSwitch 1.0;\n"
+	<< "set KcurrSwitch 0.0;\n"
+	<< "set KinitSwitch 0.0;\n"
+	<< "set KcommSwitch 1.0;\n"
+	<< "set nEigenI 1;\n";
+      
+      json_t *geometry = json_object_get(rootSAM,"Geometry");
+      json_t *nodes = json_object_get(geometry,"nodes");
+      int nStory = json_array_size(nodes)-1;
+      int nEigenJ=0;
+      if (nStory <= 0) {
+	nEigenJ = 2;
+	nStory = 1;
+      } else if (nStory<=2)
+	nEigenJ=nStory*2;   //first mode or second mode
+      else
+	nEigenJ=3*2;          
+      
+      s << "set nEigenJ "<<nEigenJ<<";\n"
+	<< "set lambdaN [eigen -fullGenLapack "<< nEigenJ <<"];\n"
+	<< "set lambdaI [lindex $lambdaN [expr $nEigenI-1]];\n"
+	<< "set lambdaJ [lindex $lambdaN [expr $nEigenJ-1]];\n"
+	<< "set omegaI [expr pow($lambdaI,0.5)];\n"
+	<< "set omegaJ [expr pow($lambdaJ,0.5)];\n"
+	<< "set alphaM [expr $MpropSwitch*$xDamp*(2*$omegaI*$omegaJ)/($omegaI+$omegaJ)];\n"
+	<< "set betaKcurr [expr $KcurrSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
+	<< "set betaKinit [expr $KinitSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
+	<< "set betaKcomm [expr $KcommSwitch*2.*$xDamp/($omegaI+$omegaJ)];\n"
+	<< "rayleigh $alphaM $betaKcurr $betaKinit $betaKcomm;\n";
+    }
 
      return 0;
 }
@@ -817,177 +820,4 @@ int main(int argc, char **argv)
     thePreprocessor.createInputFile(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
 
   return 0;
-}
-
-
-namespace Units
-{
-
-double GetLengthFactor(UnitSystem& fromUnitSystem, UnitSystem& toUnitSystem)
-{
-    if(LengthUnit::Unknown == fromUnitSystem.lengthUnit)
-    {
-        std::cerr << "Unknown length unit!!!" << std::endl;
-        return 1.0;
-    }
-
-    if(LengthUnit::Unknown == toUnitSystem.lengthUnit)
-    {
-        std::cerr << "Unknown length unit!!!" << std::endl;
-        return 1.0;
-    }
-
-    if(fromUnitSystem.lengthUnit == toUnitSystem.lengthUnit)
-        return 1.0;
-
-
-    //Converting from fromUnitSystem to Millimeter
-    double toMillimeter = 1.0;
-
-    if(LengthUnit::Meter == fromUnitSystem.lengthUnit)
-        toMillimeter = 1000.0;
-
-    else if(LengthUnit::Centimeter == fromUnitSystem.lengthUnit)
-        toMillimeter = 10.0;
-
-    else if(LengthUnit::Millimeter == fromUnitSystem.lengthUnit)
-        toMillimeter = 1.0;
-
-    else if(LengthUnit::Inch == fromUnitSystem.lengthUnit)
-        toMillimeter = 25.4;
-
-    else if(LengthUnit::Foot == fromUnitSystem.lengthUnit)
-        toMillimeter = 304.8;
-
-    //Converting from Millimeter to toUnitSystem
-    double fromMillimeter = 1.0;
-
-    if(LengthUnit::Meter == toUnitSystem.lengthUnit)
-        fromMillimeter = 0.001;
-
-    else if(LengthUnit::Centimeter == toUnitSystem.lengthUnit)
-        fromMillimeter = 0.1;
-
-    else if(LengthUnit::Millimeter == toUnitSystem.lengthUnit)
-        fromMillimeter = 1.0;
-
-    else if(LengthUnit::Inch == toUnitSystem.lengthUnit)
-        fromMillimeter = 1.0/25.4;
-
-    else if(LengthUnit::Foot == toUnitSystem.lengthUnit)
-        fromMillimeter = 1.0/304.8;
-
-    return toMillimeter * fromMillimeter;
-}
-
-double GetTimeFactor(UnitSystem& fromUnitSystem, UnitSystem& toUnitsystem)
-{
-    if(TimeUnit::Unknown == fromUnitSystem.timeUnit)
-    {
-        std::cerr << "Unknown time unit!!!" << std::endl;
-        return 1.0;
-    }
-
-    if(TimeUnit::Unknown == toUnitsystem.timeUnit)
-    {
-        std::cerr << "Unknown time unit!!!" << std::endl;
-        return 1.0;
-    }
-
-    if(fromUnitSystem.timeUnit == toUnitsystem.timeUnit)
-        return 1.0;
-
-    //converting to second
-    double toSecond = 1.0;
-    if(TimeUnit::Hour == fromUnitSystem.timeUnit)
-        toSecond = 3600.0;
-
-    else if(TimeUnit::Minute == fromUnitSystem.timeUnit)
-        toSecond = 60.0;
-
-    //converting from second
-    double fromSecond = 1.0;
-    if(TimeUnit::Hour == toUnitsystem.timeUnit)
-        fromSecond = 1.0/3600.0;
-
-    else if(TimeUnit::Minute == toUnitsystem.timeUnit)
-        fromSecond = 1.0/60.0;
-
-    return toSecond * fromSecond;
-}
-
-double GetAccelerationFactor(UnitSystem& fromUnitSystem, UnitSystem& toUnitSystem)
-{
-    double timeFactor = GetTimeFactor(fromUnitSystem, toUnitSystem);
-    double lengthFactor = GetLengthFactor(fromUnitSystem, toUnitSystem);
-
-    return lengthFactor / std::pow(timeFactor, 2);
-}
-
-LengthUnit ParseLengthUnit(const char* lengthUnit)
-{
-    std::string lengthUnitString(lengthUnit);
-    std::transform(lengthUnitString.begin(), lengthUnitString.end(), lengthUnitString.begin(), ::tolower);
-
-    static std::map<std::string, LengthUnit> lengthUnitMap
-    {
-        {"m", LengthUnit::Meter},
-        {"meter", LengthUnit::Meter},
-        {"meters", LengthUnit::Meter},
-        {"cm", LengthUnit::Centimeter},
-
-        {"centimeter", LengthUnit::Centimeter},
-        {"centimeters", LengthUnit::Centimeter},
-
-        {"mm", LengthUnit::Millimeter},
-        {"millimeter", LengthUnit::Millimeter},
-        {"millimeters", LengthUnit::Millimeter},
-        
-        {"in", LengthUnit::Inch},
-        {"inch", LengthUnit::Inch},
-        {"inches", LengthUnit::Inch},
-        
-        {"ft", LengthUnit::Foot},
-        {"foot", LengthUnit::Foot},
-        {"feet", LengthUnit::Foot}
-    };
-
-    if(lengthUnitMap.end() != lengthUnitMap.find(lengthUnitString))
-        return lengthUnitMap[lengthUnitString];
-
-    std::cerr << "Failed to parse length unit: " << lengthUnitString  << "!!!" << std::endl;
-    return LengthUnit::Unknown;
-}
-
-TimeUnit ParseTimeUnit(const char* timeUnit)
-{
-    std::string timeUnitString(timeUnit);
-    std::transform(timeUnitString.begin(), timeUnitString.end(), timeUnitString.begin(), ::tolower);
-
-    static map<std::string, TimeUnit> timeUnitMap
-    {
-        {"s", TimeUnit::Second},
-        {"sec", TimeUnit::Second},
-        {"second", TimeUnit::Second},
-        {"seconds", TimeUnit::Second},
-
-        {"min", TimeUnit::Minute},
-        {"minute", TimeUnit::Minute},
-        {"minutes", TimeUnit::Minute},
-
-        {"hr", TimeUnit::Hour},
-        {"hour", TimeUnit::Hour},
-        {"hours", TimeUnit::Hour},
-
-    };
-
-    if(timeUnitMap.end() != timeUnitMap.find(timeUnitString))
-        return timeUnitMap[timeUnitString];
-
-    std::cerr << "Failed to parse time unit: " << timeUnitString  << "!!!" << std::endl;
-
-    return TimeUnit::Unknown;
-}
-
-
 }

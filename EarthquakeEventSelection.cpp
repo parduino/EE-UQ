@@ -81,12 +81,13 @@ EarthquakeEventSelection::EarthquakeEventSelection(RandomVariablesContainer *the
     QLabel *label = new QLabel();
     label->setText(QString("Loading Type"));
     eventSelection = new QComboBox();
+    eventSelection->setObjectName("LoadingTypeCombox");
     //    eventSelection->addItem(tr("Existing"));
     eventSelection->addItem(tr("Multiple Existing"));
     eventSelection->addItem(tr("Multiple PEER"));
     eventSelection->addItem(tr("Hazard Based Event"));    
     eventSelection->addItem(tr("Site Response"));
-    eventSelection->addItem(tr("Stochastic Ground Motion Model"));
+    eventSelection->addItem(tr("Stochastic Ground Motion"));
     eventSelection->addItem(tr("User Application"));
 
     eventSelection->setItemData(1, "A Seismic event using Seismic Hazard Analysis and Record Selection/Scaling", Qt::ToolTipRole);
@@ -208,7 +209,7 @@ void EarthquakeEventSelection::eventSelectionChanged(const QString &arg1)
       theCurrentEvent = theRockOutcrop;
     }
 
-    else if (arg1 == "Stochastic Ground Motion Model") {
+    else if (arg1 == "Stochastic Ground Motion") {
       theStackedWidget->setCurrentIndex(4);
       theCurrentEvent = theStochasticMotionWidget;
     }
@@ -274,6 +275,7 @@ EarthquakeEventSelection::inputAppDataFromJSON(QJsonObject &jsonObject)
                type == QString("SiteResponse")) {
         index = 3;
     } else if (type == QString("Stochastic Ground Motion Model") ||
+	       type == QString("Stochastic Ground Motion") ||
                type == QString("StochasticMotion")) {
         index = 4;
     } else if ((type == QString("User Application")) ||

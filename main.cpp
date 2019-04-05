@@ -16,6 +16,7 @@
 #include <QFile>
 #include <QTime>
 #include <QTextStream>
+#include <GoogleAnalytics.h>
 
  // customMessgaeOutput code from web:
  // https://stackoverflow.com/questions/4954140/how-to-redirect-qdebug-qwarning-qcritical-etc-output
@@ -52,6 +53,14 @@ void customMessageOutput(QtMsgType type, const QMessageLogContext &context, cons
 
 int main(int argc, char *argv[])
 {
+    //Setting Core Application Name, Organization, Version and Google Analytics Tracking Id
+    QCoreApplication::setApplicationName("EE-UQ");
+    QCoreApplication::setOrganizationName("SimCenter");
+    QCoreApplication::setApplicationVersion("1.1.0");
+    GoogleAnalytics::SetTrackingId("UA-126303135-1");
+    GoogleAnalytics::StartSession();
+    GoogleAnalytics::ReportStart();
+
   //
   // set up logging of output messages for user debugging
   //
@@ -139,17 +148,25 @@ int main(int argc, char *argv[])
 
   w.show();
 
-  QFile file(":/styleCommon/style.qss");
-  if(file.open(QFile::ReadOnly)) {
+
+  QFile file(":/styleCommon/common_experimental.qss");
+  QFile fileEEUQ(":/styles/stylesheet_eeuq.qss");
+  if(file.open(QFile::ReadOnly) && fileEEUQ.open(QFile::ReadOnly)) {
     QString styleSheet = QLatin1String(file.readAll());
-    a.setStyleSheet(styleSheet);
+    QString styleSheetEEUQ = QLatin1String(fileEEUQ.readAll());
+    a.setStyleSheet(styleSheet+styleSheetEEUQ);
+    file.close();
+    fileEEUQ.close();
   }
 
 
+
+/*
   theInputApp->setStyleSheet("QComboBox {background: #FFFFFF;} \
 QGroupBox {font-weight: bold;}\
 QLineEdit {background-color: #FFFFFF; border: 2px solid darkgray;} \
 QTabWidget::pane {background-color: #ECECEC; border: 1px solid rgb(239, 239, 239);}");
+*/
 
 
 //QTQTabWidget::pane{
@@ -166,6 +183,7 @@ QTabWidget::pane {background-color: #ECECEC; border: 1px solid rgb(239, 239, 239
   theRemoteService->logout();
   thread->quit();
 
+  GoogleAnalytics::EndSession();
   // done
   return res;
 }

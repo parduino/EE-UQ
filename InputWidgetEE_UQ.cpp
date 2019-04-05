@@ -87,6 +87,8 @@ UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 #include <QtNetwork/QNetworkRequest>
 #include <QHostInfo>
 
+#include <GoogleAnalytics.h>
+
 // static pointer for global procedure set in constructor
 static InputWidgetEE_UQ *theApp = 0;
 
@@ -244,7 +246,12 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     treeView->setModel(standardModel);
     treeView->expandAll();
     treeView->setHeaderHidden(true);
+    treeView->setMinimumWidth(100);
     treeView->setMaximumWidth(100);
+    treeView->setMinimumWidth(100);
+
+    treeView->setEditTriggers(QTreeView::EditTrigger::NoEditTriggers);//Disable Edit for the TreeView
+
 
     //
     // customize the apperance of the menu on the left
@@ -253,7 +260,7 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff ); // hide the horizontal scroll bar
     treeView->setObjectName("treeViewOnTheLeft");
     treeView->setIndentation(0);
-    QFile file(":/styles/stylesheet.qss");
+    QFile file(":/styles/menuBar.qss");
     if(file.open(QFile::ReadOnly)) {
         treeView->setStyleSheet(file.readAll());
         file.close();
@@ -313,28 +320,6 @@ InputWidgetEE_UQ::InputWidgetEE_UQ(RemoteService *theService, QWidget *parent)
     manager->get(QNetworkRequest(QUrl("http://opensees.berkeley.edu/OpenSees/developer/bfm/use.php")));
     //  manager->get(QNetworkRequest(QUrl("https://simcenter.designsafe-ci.org/multiple-degrees-freedom-analytics/")));
 
-
-    QNetworkRequest request;
-    QUrl host("http://www.google-analytics.com/collect");
-    request.setUrl(host);
-    request.setHeader(QNetworkRequest::ContentTypeHeader,
-                      "application/x-www-form-urlencoded");
-
-    // setup parameters of request
-    QString requestParams;
-    QUuid uuid = QUuid::createUuid();
-    QString hostname = QHostInfo::localHostName() + "." + QHostInfo::localDomainName();
-    requestParams += "v=1"; // version of protocol
-    requestParams += "&tid=UA-126303135-1-1"; // Google Analytics account
-    requestParams += "&cid=" + uuid.toString(); // unique user identifier
-    requestParams += "&t=event";  // hit type = event others pageview, exception
-    requestParams += "&an=EEUQ";   // app name
-    requestParams += "&av=1.0.1"; // app version
-    requestParams += "&ec=EEUQ";   // event category
-    requestParams += "&ea=start"; // event action
-
-    // send request via post method
-    manager->post(request, requestParams.toStdString().c_str());
 }
 
 InputWidgetEE_UQ::~InputWidgetEE_UQ()
@@ -556,6 +541,7 @@ InputWidgetEE_UQ::onRunButtonClicked() {
     theRunWidget->hide();
     theRunWidget->setMinimumWidth(this->width()*0.5);
     theRunWidget->showLocalApplication();
+    GoogleAnalytics::ReportLocalRun();
 }
 
 void
@@ -565,7 +551,6 @@ InputWidgetEE_UQ::onRemoteRunButtonClicked(){
     bool loggedIn = theRemoteService->isLoggedIn();
 
     if (loggedIn == true) {
-
         theRunWidget->hide();
         theRunWidget->setMinimumWidth(this->width()*0.5);
         theRunWidget->showRemoteApplication();
@@ -573,6 +558,8 @@ InputWidgetEE_UQ::onRemoteRunButtonClicked(){
     } else {
         errorMessage("ERROR - You Need to Login");
     }
+
+    GoogleAnalytics::ReportDesignSafeRun();
 }
 
 void

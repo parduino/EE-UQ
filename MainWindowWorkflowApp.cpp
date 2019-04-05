@@ -36,7 +36,7 @@
 
 
 MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget *theApp, RemoteService *theService, QWidget *parent)
-  : QMainWindow(parent), theRemoteInterface(theService), inputWidget(theApp), loggedIn(false)
+  : QMainWindow(parent), theRemoteInterface(theService), inputWidget(theApp), loggedIn(false), isAutoLogin(false)
 {
     //
     // create a layout & widget for central area of this QMainWidget
@@ -117,6 +117,7 @@ MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget 
     //
 
     loginWindow = new QWidget();
+    loginWindow->setWindowTitle("Login to DesignSafe");
     QGridLayout *loginLayout = new QGridLayout();
     SectionTitle *info=new SectionTitle();
     info->setText(tr("DesignSafe User Account Info:"));
@@ -138,21 +139,29 @@ MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget 
     loginLayout->addWidget(loginSubmitButton,4,2);
     loginWindow->setLayout(loginLayout);
 
+    /*
     loginWindow->setStyleSheet("QComboBox {background: #FFFFFF;} \
   QGroupBox {font-weight: bold;}\
   QLineEdit {background-color: #FFFFFF; border: 2px solid darkgray;} \
   QTabWidget::pane {background-color: #ECECEC; border: 1px solid rgb(239, 239, 239);}");
+  */
 
     //
     // connect some signals and slots
     //
 
     // login
-    connect(loginButton,SIGNAL(clicked(bool)),this,SLOT(onLoginButtonClicked()));
+    connect(loginButton,&QPushButton::clicked,this,[this](bool)
+    {
+        isAutoLogin = false;
+        onLoginButtonClicked();
+    });
     connect(loginSubmitButton,SIGNAL(clicked(bool)),this,SLOT(onLoginSubmitButtonClicked()));
     connect(this,SIGNAL(attemptLogin(QString, QString)),theRemoteInterface,SLOT(loginCall(QString, QString)));
     connect(theRemoteInterface,SIGNAL(loginReturn(bool)),this,SLOT(attemptLoginReturn(bool)));
-
+    connect(passwordLineEdit, &QLineEdit::returnPressed, this, [this](){
+        this->onLoginSubmitButtonClicked();
+    });
     // logout
     connect(this,SIGNAL(logout()),theRemoteInterface,SLOT(logoutCall()));
     connect(theRemoteInterface,SIGNAL(logoutReturn(bool)),this,SLOT(logoutReturn(bool)));
@@ -566,6 +575,11 @@ MainWindowWorkflowApp::attemptLoginReturn(bool ok){
         //this->enableButtons();
 
         //theJobManager->up
+        if(isAutoLogin)
+        {
+            onRemoteRunButtonClicked();
+            isAutoLogin = false;
+        }
     } else {
         loggedIn = false;
 
@@ -603,7 +617,11 @@ MainWindowWorkflowApp::onRemoteRunButtonClicked(){
     if (loggedIn == true)
         inputWidget->onRemoteRunButtonClicked();
     else
-        this->errorMessage(tr("You Must be LOGIN (button top right) before you can run a remote job"));
+    {
+        this->errorMessage(tr("You must log in to DesignSafe before you can run a remote job"));
+        this->onLoginButtonClicked();
+        isAutoLogin = true;
+    }
 }
 
 void
@@ -611,7 +629,7 @@ MainWindowWorkflowApp::onRemoteGetButtonClicked(){
     if (loggedIn == true)
         inputWidget->onRemoteGetButtonClicked();
     else
-        this->errorMessage(tr("You Must be LOGIN (button top right) before you can run retrieve remote data"));
+        this->errorMessage(tr("You Must LOGIN (button top right) before you can run retrieve remote data"));
 };
 
 void MainWindowWorkflowApp::onExitButtonClicked(){

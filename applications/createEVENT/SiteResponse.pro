@@ -2,11 +2,7 @@ TEMPLATE = app
 CONFIG += console c++11
 
 DESTDIR  = $$PWD
-SOURCES += MDOF_BuildingModelToSAM.cpp \
-           $$PWD/../common/Units.cpp
-
-INCLUDEPATH += $$PWD/../common
-
+SOURCES += SiteResponse.cpp
 
 macx{
     INCLUDEPATH+="/usr/local/jansson/include"
@@ -22,4 +18,3 @@ win32{
 unix:!macx{
     LIBS+="/usr/lib/x86_64-linux-gnu/libjansson.a"
 }
-
