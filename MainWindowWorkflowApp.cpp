@@ -31,9 +31,10 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QLineEdit>
+#include <QSettings>
 
 #include <RemoteService.h>
-
+#include <SimCenterPreferences.h>
 
 MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget *theApp, RemoteService *theService, QWidget *parent)
   : QMainWindow(parent), theRemoteInterface(theService), inputWidget(theApp), loggedIn(false), isAutoLogin(false)
@@ -82,8 +83,6 @@ MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget 
     header->appendLayout(layoutLogin);
 
     layout->addWidget(inputWidget);
-
-    // layout->addStretch();
 
     //
     // add run, run-DesignSafe and exit buttons into a new widget for buttons
@@ -207,9 +206,26 @@ MainWindowWorkflowApp::MainWindowWorkflowApp(QString appName, WorkflowAppWidget 
 
     inputWidget->setMainWindow(this);
 
+    
+    //
+    // if have save login and passowrd fill in lineedits
+    //
+ 
+    QSettings settings("SimCenter", "Common");
+    QVariant  loginName = settings.value("loginAgave");
+    QVariant  loginPassword = settings.value("passwordAgave");
+    if (loginName.isValid()) {
+        nameLineEdit->setText(loginName.toString());      
+    }
+    if (loginPassword.isValid()) {
+        passwordLineEdit->setText(loginPassword.toString());      
+    }
+
+
     //
     // strings needed in about menu, use set methods to override
     //
+
     manualURL = QString("");
     feedbackURL = QString("https://docs.google.com/forms/d/e/1FAIpQLSfh20kBxDmvmHgz9uFwhkospGLCeazZzL770A2GuYZ2KgBZBA/viewform");
     featureRequestURL = QString("https://docs.google.com/forms/d/e/1FAIpQLScTLkSwDjPNzH8wx8KxkyhoIT7AI9KZ16Wg9TuW1GOhSYFOag/viewform");
@@ -450,6 +466,12 @@ void MainWindowWorkflowApp::createActions() {
     connect(saveAsAction, &QAction::triggered, this, &MainWindowWorkflowApp::saveAs);
     fileMenu->addAction(saveAsAction);
 
+    thePreferences = SimCenterPreferences::getInstance(this);    
+    QAction *preferenceAction = new QAction(tr("&Preferences"), this);
+    preferenceAction->setStatusTip(tr("Set application preferences"));
+    connect(preferenceAction, &QAction::triggered, this, &MainWindowWorkflowApp::preferences);
+    fileMenu->addAction(preferenceAction);    
+
     // strangely, this does not appear in menu (at least on a mac)!! ..
     // does Qt not allow as in tool menu by default?
     // check for yourself by changing Quit to drivel and it works
@@ -459,14 +481,15 @@ void MainWindowWorkflowApp::createActions() {
     fileMenu->addAction(exitAction);
 
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
-    QAction *aboutAct = helpMenu->addAction(tr("&Version"), this, &MainWindowWorkflowApp::version);
-    QAction *infoAct = helpMenu->addAction(tr("&About"), this, &MainWindowWorkflowApp::about);
+    QAction *versionAct = helpMenu->addAction(tr("&Version"), this, &MainWindowWorkflowApp::version);
+    QAction *aboutAct = helpMenu->addAction(tr("&About"), this, &MainWindowWorkflowApp::about);
     QAction *manualAct = helpMenu->addAction(tr("&Manual"), this, &MainWindowWorkflowApp::manual);
     QAction *submitAct = helpMenu->addAction(tr("&Provide Feedback"), this, &MainWindowWorkflowApp::submitFeedback);
     QAction *submitFeature = helpMenu->addAction(tr("&Submit Feature Request"), this, &MainWindowWorkflowApp::submitFeatureRequest);
     QAction *citeAct = helpMenu->addAction(tr("&How to Cite"), this, &MainWindowWorkflowApp::cite);
     QAction *copyrightAct = helpMenu->addAction(tr("&License"), this, &MainWindowWorkflowApp::copyright);
 }
+
 
 
 
@@ -512,6 +535,12 @@ MainWindowWorkflowApp::attemptLoginReturn(bool ok){
         loginWindow->hide();
         loggedIn = true;
         loginButton->setText("Logout");
+
+
+	QSettings settings("SimCenter", "Common");
+	settings.setValue("loginAgave", nameLineEdit->text());
+	settings.setValue("passwordAgave", passwordLineEdit->text());
+
         //this->enableButtons();
 
         //theJobManager->up
@@ -620,6 +649,7 @@ void MainWindowWorkflowApp::cite()
     msgBox.exec();
 }
 
+
 void MainWindowWorkflowApp::about()
 {
     QMessageBox msgBox;
@@ -628,6 +658,11 @@ void MainWindowWorkflowApp::about()
     QGridLayout *layout = (QGridLayout*)msgBox.layout();
     layout->addItem(theSpacer, layout->rowCount(),0,1,layout->columnCount());
     msgBox.exec();
+}
+
+void MainWindowWorkflowApp::preferences()
+{
+  thePreferences->show();
 }
 
 void MainWindowWorkflowApp::submitFeedback()
